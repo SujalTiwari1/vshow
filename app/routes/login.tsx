@@ -2,6 +2,10 @@ import { Form, data, redirect } from "react-router";
 import type { Route } from "./+types/login";
 import { assertSameOrigin, authUnavailable, resolveAccess } from "../auth/authorize.server";
 import { AuthConfigError } from "../auth/config.server";
+import { landingPath } from "../auth/landing";
+import { PublicHeader } from "../components/app-header";
+import { Notice } from "../components/ui";
+import { SubmitButton } from "../components/workflow-ui";
 import { getRequestScope } from "../server/request-scope.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -32,7 +36,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   let available: boolean;
   try {
     const access = await resolveAccess(scope, request.headers);
-    if (access.status === "ok") throw redirect("/me");
+    if (access.status === "ok") throw redirect(landingPath(access.user.roles));
     if (access.status === "unassigned") throw redirect("/unclaimed");
     // No registered vauth client (local development before registration): the sign-in button is replaced by a notice.
     available = scope.auth.config().oauth !== null;
@@ -61,7 +65,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (!config.oauth) throw data(null, { status: 503 }); // vauth client not configured
 
   const response = await scope.auth.get().api.signInWithOAuth2({
-    body: { providerId: "voss", callbackURL: "/me" },
+    body: { providerId: "voss", callbackURL: "/" },
     headers: request.headers,
     asResponse: true,
   });
@@ -77,32 +81,41 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Login({ loaderData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto max-w-md p-6 pt-16">
-      <h1 className="text-2xl font-semibold">Vshow</h1>
-      <p className="mt-2 text-sm text-gray-600">Campus signage media approval. Sign in with your VOSS account.</p>
-      {loaderData.message && (
-        <p role="alert" className="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {loaderData.message}
-        </p>
-      )}
-      {loaderData.available ? (
-        <Form method="post" action="/login" className="mt-6">
-          <button type="submit" className="w-full rounded bg-black px-4 py-2 text-white">
-            Sign in with VOSS
-          </button>
-        </Form>
-      ) : (
-        <p role="alert" className="mt-6 rounded border border-yellow-300 bg-yellow-50 p-3 text-sm">
-          Sign-in is not available right now.
-        </p>
-      )}
-      {loaderData.devAuth && (
-        <p className="mt-6 text-sm">
-          <a className="underline" href="/dev/login">
-            Local development identity switcher
-          </a>
-        </p>
-      )}
-    </main>
+    <>
+      <PublicHeader action={<span />} />
+      <main id="main" tabIndex={-1} className="container-voss page outline-none">
+        <div className="mx-auto max-w-md pt-10 md:pt-20">
+          <p className="eyebrow eyebrow-brand mb-3">Sign in</p>
+          <h1 className="page-title">Welcome to Vshow</h1>
+          <p className="mt-3 text-dim">Campus screen media approval. Sign in with your VOSS account.</p>
+          <div className="panel mt-8 space-y-5">
+            {loaderData.message && (
+              <Notice tone="danger" title="Couldn’t sign you in" role="alert">
+                {loaderData.message}
+              </Notice>
+            )}
+            {loaderData.available ? (
+              <Form method="post" action="/login">
+                <SubmitButton className="btn w-full" pending="Redirecting to VOSS…">
+                  Sign in with VOSS <span aria-hidden="true">→</span>
+                </SubmitButton>
+              </Form>
+            ) : (
+              <Notice tone="warn" title="Sign-in is not available right now" role="alert">
+                Try again later, or contact an administrator if this continues.
+              </Notice>
+            )}
+            <p className="hint">Only verified @vit.edu.in and @vosslabs.org addresses are accepted.</p>
+          </div>
+          {loaderData.devAuth && (
+            <p className="mt-6 text-sm">
+              <a className="link" href="/dev/login">
+                Local development identity switcher
+              </a>
+            </p>
+          )}
+        </div>
+      </main>
+    </>
   );
 }

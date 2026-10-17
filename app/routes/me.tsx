@@ -1,6 +1,9 @@
-import { Form, Link } from "react-router";
+import { Link } from "react-router";
 import type { Route } from "./+types/me";
 import { requireAssignedUser } from "../auth/authorize.server";
+import { ROLE_LABEL } from "../auth/landing";
+import { AppShell } from "../components/app-header";
+import { MetadataList, Notice, PageHeader } from "../components/ui";
 import { getRequestScope } from "../server/request-scope.server";
 
 export function meta(_args: Route.MetaArgs) {
@@ -19,43 +22,91 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
+// One entry per role that has a page, in the same order as the header navigation.
+const DESTINATIONS = [
+  {
+    role: "CONVENER",
+    to: "/submissions",
+    title: "My submissions",
+    text: "Create drafts, upload media, and track review decisions.",
+  },
+  {
+    role: "REVIEWER",
+    to: "/review",
+    title: "Review queue",
+    text: "Approve, reject, or request changes on pending submissions.",
+  },
+  {
+    role: "SERVER_ROOM_MANAGER",
+    to: "/manager",
+    title: "Server room",
+    text: "See approved media to put on the screens and mark it done.",
+  },
+  { role: "ADMIN", to: "/admin", title: "Users", text: "Assign roles and committee memberships to people." },
+];
+
 export default function Me({ loaderData }: Route.ComponentProps) {
+  const { roles, committees } = loaderData;
+  const destinations = DESTINATIONS.filter((d) => (roles as readonly string[]).includes(d.role));
   return (
-    <main className="mx-auto max-w-md p-6 pt-16">
-      <h1 className="text-2xl font-semibold">{loaderData.displayName}</h1>
-      <p className="text-sm text-gray-600">{loaderData.email}</p>
-      <h2 className="mt-6 font-medium">Roles</h2>
-      <ul className="list-disc pl-5 text-sm">
-        {loaderData.roles.map((r) => (
-          <li key={r}>{r}</li>
-        ))}
-      </ul>
-      <h2 className="mt-4 font-medium">Committees</h2>
-      <ul className="list-disc pl-5 text-sm">
-        {loaderData.committees.length === 0 && <li>None</li>}
-        {loaderData.committees.map((c) => (
-          <li key={c.code}>
-            {c.code} ({c.type})
-          </li>
-        ))}
-      </ul>
-      <nav className="mt-6 flex gap-4 text-sm">
-        {loaderData.roles.includes("CONVENER") && (
-          <Link className="underline" to="/submissions">
-            My submissions
-          </Link>
+    <AppShell roles={roles}>
+      <PageHeader
+        eyebrow="Your account"
+        title={loaderData.displayName}
+        description={<span className="break-all">{loaderData.email}</span>}
+      />
+
+      <MetadataList
+        items={[
+          {
+            label: "Roles",
+            value: roles.length ? (
+              <ul className="m-0 list-none p-0">
+                {roles.map((r) => (
+                  <li key={r}>{ROLE_LABEL[r] ?? r}</li>
+                ))}
+              </ul>
+            ) : (
+              "None"
+            ),
+          },
+          {
+            label: "Committees",
+            value: committees.length ? (
+              <ul className="m-0 list-none p-0">
+                {committees.map((c) => (
+                  <li key={c.code}>
+                    {c.code} <span className="mono text-xs text-dim">{c.type}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              "None"
+            ),
+          },
+        ]}
+      />
+
+      <div className="mt-12">
+        <p className="eyebrow mb-4">Where to next</p>
+        {destinations.length ? (
+          <div className="rows">
+            {destinations.map((d, i) => (
+              <Link key={d.to} to={d.to} className="row-item hover-row group">
+                <span className="step-num pt-1.5">{String(i + 1).padStart(2, "0")}</span>
+                <span>
+                  <span className="block text-2xl font-semibold tracking-tight group-hover:text-brand">
+                    {d.title} <span aria-hidden="true">→</span>
+                  </span>
+                  <span className="mt-1 block text-dim">{d.text}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <Notice tone="info">You don’t have a role with a page yet. An administrator can assign one.</Notice>
         )}
-        {loaderData.roles.includes("REVIEWER") && (
-          <Link className="underline" to="/review">
-            Review queue
-          </Link>
-        )}
-      </nav>
-      <Form method="post" action="/logout" className="mt-6">
-        <button type="submit" className="rounded border px-4 py-2">
-          Sign out
-        </button>
-      </Form>
-    </main>
+      </div>
+    </AppShell>
   );
 }
