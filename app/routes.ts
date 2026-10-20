@@ -20,6 +20,8 @@ export default [
   // Server Room Manager: approved media to put on the screens, and marking it done.
   route("manager", "routes/manager._index.tsx"),
   route("manager/:id", "routes/manager.$id.tsx"),
+  // Access requests: Corporate Communication (and administrators) decide who may use the portal.
+  route("requests", "routes/requests.tsx"),
   // Administrator: assign roles and committee memberships (new sign-ups have no role until then).
   route("admin", "routes/admin._index.tsx"),
   route("admin/:id", "routes/admin.$id.tsx"),
