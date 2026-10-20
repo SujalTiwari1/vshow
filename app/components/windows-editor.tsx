@@ -2,17 +2,12 @@
 // the server validates the timestamps and screens. Times are entered and shown in campus time (Asia/Kolkata).
 import { useEffect, useId, useState } from "react";
 import { formatCampus, parseCampusDateTime, toCampusInputValue } from "../submissions/time.ts";
+import { ALL_DAY_END, ALL_DAY_START, ALL_SCREENS } from "../submissions/windows.ts";
+import { collapseAllScreens, toAllDay, toEditable, type EditableWindow } from "../submissions/window-edit.ts";
 import { DateTimePicker } from "./date-time-picker.tsx";
 
 /** The picker offers nothing earlier than this many minutes from now, leaving time to finish and submit. */
 const EARLIEST_START_MINUTES = 10;
-
-export interface EditableWindow {
-  screenId: string;
-  startAt: string;
-  endAt: string;
-  note: string;
-}
 
 export function WindowsEditor({
   screens,
@@ -25,14 +20,9 @@ export function WindowsEditor({
   name?: string;
   maxWindows: number;
 }) {
-  const [rows, setRows] = useState<EditableWindow[]>(
-    initial.map((w) => ({
-      screenId: w.screenId,
-      startAt: w.startAt ? toCampusInputValue(w.startAt) : "",
-      endAt: w.endAt ? toCampusInputValue(w.endAt) : "",
-      note: w.note ?? "",
-    })),
-  );
+  const [rows, setRows] = useState<EditableWindow[]>(() => collapseAllScreens(toEditable(initial), screens));
+  // Rows are sent to the server with the all-day times filled in; "all day" itself is just 00:00 to 23:59.
+  const sent = rows.map((r) => ({ screenId: r.screenId, startAt: r.startAt, endAt: r.endAt, note: r.note }));
   const update = (i: number, patch: Partial<EditableWindow>) =>
     setRows((r) => r.map((row, n) => (n === i ? { ...row, ...patch } : row)));
   const uid = useId();
@@ -47,6 +37,9 @@ export function WindowsEditor({
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
+  const tomorrow = now
+    ? `${toCampusInputValue(new Date(now.getTime() + 24 * 3_600_000)).slice(0, 10)}T${ALL_DAY_START}`
+    : undefined;
   const earliestStart = now ? toCampusInputValue(new Date(now.getTime() + EARLIEST_START_MINUTES * 60_000)) : undefined;
   const startHasPassed = (startAt: string) => {
     const start = parseCampusDateTime(startAt);
@@ -56,7 +49,7 @@ export function WindowsEditor({
   return (
     <div>
       {/* The server receives the rows as JSON; it re-validates every value. */}
-      <input type="hidden" name={name} value={JSON.stringify(rows)} />
+      <input type="hidden" name={name} value={JSON.stringify(sent)} />
       {rows.length === 0 && (
         <p className="mb-4 text-dim">No display windows yet. Add at least one before submitting.</p>
       )}
@@ -81,6 +74,7 @@ export function WindowsEditor({
                   onChange={(e) => update(i, { screenId: e.target.value })}
                 >
                   <option value="">Choose a screen…</option>
+                  {screens.length > 1 && <option value={ALL_SCREENS}>All screens ({screens.length})</option>}
                   {screens.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -100,17 +94,43 @@ export function WindowsEditor({
                   onChange={(e) => update(i, { note: e.target.value })}
                 />
               </div>
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={row.allDay}
+                    onChange={(e) =>
+                      update(
+                        i,
+                        e.target.checked
+                          ? { allDay: true, ...toAllDay(row) }
+                          : {
+                              allDay: false,
+                              startAt: row.startAt ? `${row.startAt.slice(0, 10)}T09:00` : "",
+                              endAt: row.endAt ? `${row.endAt.slice(0, 10)}T18:00` : "",
+                            },
+                      )
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">All day</span>
+                    <span className="text-sm text-dim"> · show for the whole day, from 00:00 to 23:59</span>
+                  </span>
+                </label>
+              </div>
               <div>
                 <label className="label" htmlFor={`${uid}-from-${i}`}>
-                  From (IST)
+                  {row.allDay ? "First day (IST)" : "From (IST)"}
                 </label>
                 <DateTimePicker
                   id={`${uid}-from-${i}`}
                   value={row.startAt}
-                  min={earliestStart}
+                  min={row.allDay ? tomorrow : earliestStart}
                   clamp
+                  fixedTime={row.allDay ? ALL_DAY_START : undefined}
                   onChange={(startAt) => update(i, { startAt })}
                 />
+                {row.allDay && <p className="hint">All-day requests start tomorrow or later.</p>}
                 {startHasPassed(row.startAt) && now && (
                   <p className="hint text-warn" role="status">
                     This start has already passed (it is {formatCampus(now)} now). Pick a later time, or the submission
@@ -120,12 +140,13 @@ export function WindowsEditor({
               </div>
               <div>
                 <label className="label" htmlFor={`${uid}-until-${i}`}>
-                  Until (IST)
+                  {row.allDay ? "Last day (IST)" : "Until (IST)"}
                 </label>
                 <DateTimePicker
                   id={`${uid}-until-${i}`}
                   value={row.endAt}
-                  min={row.startAt}
+                  min={row.allDay ? row.startAt.slice(0, 10) + "T" + ALL_DAY_END : row.startAt}
+                  fixedTime={row.allDay ? ALL_DAY_END : undefined}
                   onChange={(endAt) => update(i, { endAt })}
                 />
               </div>
@@ -137,7 +158,9 @@ export function WindowsEditor({
         type="button"
         className="btn btn-ghost mt-4"
         disabled={rows.length >= maxWindows}
-        onClick={() => setRows((r) => [...r, { screenId: screens[0]?.id ?? "", startAt: "", endAt: "", note: "" }])}
+        onClick={() =>
+          setRows((r) => [...r, { screenId: screens[0]?.id ?? "", startAt: "", endAt: "", note: "", allDay: false }])
+        }
       >
         + Add a window
       </button>
