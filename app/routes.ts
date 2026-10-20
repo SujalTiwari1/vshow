@@ -13,6 +13,7 @@ export default [
   route("submissions/:id/upload", "routes/submissions.$id.upload.ts"),
   route("submissions/:id/upload/finalize", "routes/submissions.$id.upload.finalize.ts"),
   route("submissions/:id/versions/:versionId/file", "routes/submissions.$id.versions.$versionId.file.ts"),
+  route("submissions/:id/versions/:versionId/preview", "routes/submissions.$id.versions.$versionId.preview.ts"),
   // Corporate Communication review (global reviewers).
   route("review", "routes/review._index.tsx"),
   route("review/:id", "routes/review.$id.tsx"),

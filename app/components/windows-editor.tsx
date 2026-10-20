@@ -1,8 +1,11 @@
 // Editor for the requested display windows. Rows may overlap freely (including the same screen at the same time);
 // the server validates the timestamps and screens. Times are entered and shown in campus time (Asia/Kolkata).
-import { useId, useState } from "react";
-import { toCampusInputValue } from "../submissions/time.ts";
+import { useEffect, useId, useState } from "react";
+import { formatCampus, parseCampusDateTime, toCampusInputValue } from "../submissions/time.ts";
 import { DateTimePicker } from "./date-time-picker.tsx";
+
+/** The picker offers nothing earlier than this many minutes from now, leaving time to finish and submit. */
+const EARLIEST_START_MINUTES = 10;
 
 export interface EditableWindow {
   screenId: string;
@@ -33,6 +36,22 @@ export function WindowsEditor({
   const update = (i: number, patch: Partial<EditableWindow>) =>
     setRows((r) => r.map((row, n) => (n === i ? { ...row, ...patch } : row)));
   const uid = useId();
+
+  // "Now" is read only in the browser (after the first render), so the server-rendered page and the first client
+  // render are identical. A window must start in the future when the submission is sent, so the picker will not offer
+  // anything earlier than a few minutes from now, and a start that has since passed is flagged here instead of only
+  // being refused later by the server (which still enforces the rule).
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const earliestStart = now ? toCampusInputValue(new Date(now.getTime() + EARLIEST_START_MINUTES * 60_000)) : undefined;
+  const startHasPassed = (startAt: string) => {
+    const start = parseCampusDateTime(startAt);
+    return Boolean(now && start && start.getTime() <= now.getTime());
+  };
 
   return (
     <div>
@@ -88,8 +107,16 @@ export function WindowsEditor({
                 <DateTimePicker
                   id={`${uid}-from-${i}`}
                   value={row.startAt}
+                  min={earliestStart}
+                  clamp
                   onChange={(startAt) => update(i, { startAt })}
                 />
+                {startHasPassed(row.startAt) && now && (
+                  <p className="hint text-warn" role="status">
+                    This start has already passed (it is {formatCampus(now)} now). Pick a later time, or the submission
+                    will be refused.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label" htmlFor={`${uid}-until-${i}`}>

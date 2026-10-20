@@ -19,16 +19,21 @@ export function DateTimePicker({
   value,
   onChange,
   min,
+  clamp = false,
 }: {
   id: string;
   value: string;
   onChange: (next: string) => void;
   /** Earliest selectable value (same format); earlier days are disabled. */
   min?: string;
+  /** Also raise any chosen date-and-time that is before `min` up to `min` (used for "must start in the future"). */
+  clamp?: boolean;
 }) {
   const parsed = parse(value);
   const minDay = min ? parse(min)?.date : undefined;
   const time = parsed?.time ?? "09:00";
+  // The values are fixed-width "YYYY-MM-DDTHH:mm" strings, so plain string comparison orders them correctly.
+  const atLeastMin = (v: string) => (clamp && min && v < min ? min : v);
 
   return (
     <Popover>
@@ -45,7 +50,7 @@ export function DateTimePicker({
           selected={parsed?.date}
           defaultMonth={parsed?.date ?? minDay}
           disabled={minDay ? { before: minDay } : undefined}
-          onSelect={(d) => d && onChange(`${dayString(d)}T${time}`)}
+          onSelect={(d) => d && onChange(atLeastMin(`${dayString(d)}T${time}`))}
         />
         <div className="flex items-center gap-2 border-t border-border p-3">
           <label className="label m-0" htmlFor={`${id}-time`}>
@@ -58,7 +63,7 @@ export function DateTimePicker({
             value={time}
             onChange={(e) => {
               const day = parsed ? dayString(parsed.date) : dayString(minDay ?? new Date());
-              if (e.target.value) onChange(`${day}T${e.target.value}`);
+              if (e.target.value) onChange(atLeastMin(`${day}T${e.target.value}`));
             }}
           />
         </div>

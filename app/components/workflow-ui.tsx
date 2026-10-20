@@ -1,4 +1,5 @@
 // Small presentational pieces shared by the convener and reviewer pages. No data access here.
+import { describeIssue } from "../submissions/issues.ts";
 import { formatCampus } from "../submissions/time.ts";
 import type { AuditView, DecisionView, RevisionView, VersionView, WindowView } from "../submissions/queries.server.ts";
 import { useNavigation } from "react-router";
@@ -73,9 +74,7 @@ export function ErrorNotice({
         {error.issues && error.issues.length > 0 && (
           <ul className="mt-1 list-disc pl-5">
             {error.issues.map((i, n) => (
-              <li key={`${i.path}-${i.code}-${n}`}>
-                {i.path || "form"}: {i.code.replaceAll("_", " ")}
-              </li>
+              <li key={`${i.path}-${i.code}-${n}`}>{describeIssue(i.path, i.code)}</li>
             ))}
           </ul>
         )}
