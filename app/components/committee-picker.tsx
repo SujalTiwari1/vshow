@@ -189,7 +189,7 @@ export function CommitteePicker({
 
       <dialog
         ref={dialog}
-        className="panel max-w-md p-6"
+        className="panel fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-md p-6 text-ink backdrop:bg-black/50"
         aria-labelledby={`${uid}-title`}
         onClose={() => setPendingName(null)}
         onCancel={() => setPendingName(null)}
